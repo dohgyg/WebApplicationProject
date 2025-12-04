@@ -52,7 +52,9 @@ const createBook = async (req, res) => {
   }
 };
 
+
 // PUT /api/books/:id
+
 const updateBook = async (req, res) => {
   try {
     const { title, author, isbn, publishedYear, availableCopies } = req.body;
@@ -60,9 +62,26 @@ const updateBook = async (req, res) => {
     const book = await Book.findById(req.params.id);
 
     if (!book) {
-      return res.status(404).json({ message: 'Book not found' });
+      return res.status(404).json({ message: "Book not found" });
     }
 
+    // Nếu là admin → update thoải mái
+    if (req.user.role !== "admin") {
+      // Nếu không phải admin → kiểm tra người tạo
+      if (!book.createdBy) {
+        return res.status(403).json({
+          message: "Book has no creator assigned. Cannot update."
+        });
+      }
+
+      if (book.createdBy.toString() !== req.user._id.toString()) {
+        return res.status(403).json({
+          message: "You can only update books you created"
+        });
+      }
+    }
+
+    // Cho phép update vì đã pass tất cả điều kiện
     book.title = title ?? book.title;
     book.author = author ?? book.author;
     book.isbn = isbn ?? book.isbn;
@@ -70,30 +89,52 @@ const updateBook = async (req, res) => {
     book.availableCopies =
       availableCopies !== undefined ? availableCopies : book.availableCopies;
 
-    const updatedBook = await book.save();
+    const updated = await book.save();
+    return res.json(updated);
 
-    return res.json(updatedBook);
   } catch (error) {
-    console.error('Update book error:', error.message);
-    return res.status(500).json({ message: 'Server error' });
+    console.error("Update book error:", error.message);
+    return res.status(500).json({ message: "Server error" });
   }
 };
+
+
+
 
 // DELETE /api/books/:id
 const deleteBook = async (req, res) => {
   try {
-    const book = await Book.findByIdAndDelete(req.params.id);
+    const book = await Book.findById(req.params.id);
 
     if (!book) {
-      return res.status(404).json({ message: 'Book not found' });
+      return res.status(404).json({ message: "Book not found" });
     }
 
-    return res.json({ message: 'Book deleted successfully' });
+    // Admin có quyền xóa tất cả sách
+    if (req.user.role === "admin") {
+      await book.deleteOne();
+      return res.json({ message: "Book deleted by admin" });
+    }
+
+    // Kiểm tra quyền sở hữu (chỉ người tạo được xóa)
+    if (book.createdBy.toString() !== req.user._id.toString()) {
+      console.log(`⛔ User ${req.user._id} tried to delete a book owned by ${book.createdBy}`);
+      return res.status(403).json({
+        message: "It's not your book. You are not the owner."
+      });
+    }
+
+    // User là chủ sở hữu → xóa
+    await book.deleteOne();
+    return res.json({ message: "Book deleted successfully" });
+
   } catch (error) {
-    console.error('Delete book error:', error.message);
-    return res.status(500).json({ message: 'Server error' });
+    console.error("Delete book error:", error.message);
+    return res.status(500).json({ message: "Server error" });
   }
 };
+
+
 
 module.exports = {
   getBooks,
