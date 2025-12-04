@@ -18,7 +18,7 @@ router.get('/:id', getBookById);
 router.post('/', protect, createBook);
 router.put('/:id', protect, updateBook);
 
-// Tùy bạn: xóa chỉ admin
-router.delete('/:id', protect, admin, deleteBook);
+// only user who created that book can delete the book and admin
+router.delete('/:id', protect, deleteBook);
 
 module.exports = router;
